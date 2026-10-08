@@ -15,6 +15,9 @@ from urllib.parse import urlparse, parse_qs
 from app import store
 from app.analytics import analyze, month_bounds, REGIONS, MODELS
 from app.cato import Cato
+from app.assessment import scenario_valid, number, saved, save_named, history, bundle, import_bundle
+from app.analytics import inspect_day
+from app.report import pdf_report
 
 STATIC = Path(__file__).parent / 'static'
 JOB = {'state':'idle', 'completed':0, 'total':0}
@@ -22,34 +25,10 @@ LOCK = threading.Lock()
 CSRF = secrets.token_urlsafe(32)
 
 
-def number(value, low=0, high=1_000_000):
-    value = float(value)
-    if not math.isfinite(value) or not low <= value <= high:
-        raise ValueError('Numeric value out of range')
-    return value
-
-
-def scenario_valid(s):
-    if s.get('model', 'bursting-2027') not in MODELS:
-        raise ValueError('Unknown model')
-    s['growth'] = number(s.get('growth', 0), -90, 1000)
-    s['headroom'] = number(s.get('headroom', 20), 0, 200)
-    for region, capacity in s.get('pools', {}).items():
-        if region not in REGIONS and region != 'Unassigned':
-            raise ValueError('Unknown pool region')
-        s['pools'][region] = number(capacity)
-    for site in s.get('sites', {}).values():
-        if site.get('region', 'Unassigned') not in REGIONS + ('Unassigned',):
-            raise ValueError('Unknown site region')
-        site['capacity'] = number(site.get('capacity', 100))
-        site['region'] = site.get('region', 'Unassigned')
-    return s
-
-
 def demo(month):
     start, end = month_bounds(month)
     rng = random.Random(95)
-    sites = [dict(id=str(i+1), name=name, region=region, capacity=cap, type='SOCKET_X1500') for i,(name,region,cap) in enumerate([
+    sites = [dict(id=str(i+1), name=name, region=region, capacity=cap, type='SOCKET_X1500',source='synthetic-demo') for i,(name,region,cap) in enumerate([
         ('New York HQ','Group 1',200), ('London Office','Group 1',100), ('Frankfurt DC','Group 1',300),
         ('Singapore Hub','Group 2',150), ('Sydney Office','Group 2',100), ('Shanghai Office','China',50)])]
     rows = []
@@ -80,7 +59,7 @@ def run_sync(client, site_ids, start, end):
         discovered = {str(s['id']): s for s in client.discover()}
         if any(str(s) not in discovered for s in site_ids):
             raise ValueError('Selected site not returned by Cato discovery')
-        sites = [dict(id=str(s), name=discovered[str(s)]['name'], type=discovered[str(s)].get('info',{}).get('connType','Unknown')) for s in site_ids]
+        sites = [dict(id=str(s), name=discovered[str(s)]['name'], source='cato-api', type=discovered[str(s)].get('info',{}).get('connType','Unknown')) for s in site_ids]
         store.save(tenant, sites, [])
         def progress(done, total):
             with LOCK:
@@ -99,7 +78,7 @@ class Handler(BaseHTTPRequestHandler):
         pass  # Never log requests that can contain tenant information.
 
     def respond(self, value, status=200, kind='application/json'):
-        data = json.dumps(value, allow_nan=False).encode() if kind == 'application/json' else value.encode()
+        data = json.dumps(value, allow_nan=False).encode() if kind == 'application/json' else value if isinstance(value,bytes) else value.encode()
         self.send_response(status)
         self.send_header('Content-Type', kind + '; charset=utf-8')
         self.send_header('Content-Length',str(len(data)))
@@ -124,8 +103,13 @@ class Handler(BaseHTTPRequestHandler):
             with LOCK:
                 job = dict(JOB)
             return self.respond(dict(tenant=tenant, months=store.months(tenant), job=job,
-                scenario=store.setting('scenario:'+tenant), csrf=CSRF,
+                scenario=store.setting('scenario:'+tenant), scenarios=saved(tenant), csrf=CSRF,
+                endpoint=os.environ.get('CATO_API_ENDPOINT','https://api.catonetworks.com/api/v1/graphql2'),
                 env_configured=bool(os.environ.get('CATO_API_KEY') and os.environ.get('CATO_ACCOUNT_ID'))))
+        if parsed.path == '/api/assessment':
+            tenant=store.setting('active_tenant') or 'demo'
+            try:return self.respond(bundle(tenant))
+            except ValueError:return self.respond({'error':'Assessment exceeds portable size limit. Use selected-month CSV exports or a full volume backup.'},413)
         if parsed.path == '/api/export':
             tenant = store.setting('active_tenant') or 'demo'
             month = parse_qs(parsed.query).get('month',[''])[0]
@@ -161,8 +145,8 @@ class Handler(BaseHTTPRequestHandler):
             if origin and urlparse(origin).netloc != self.headers.get('Host'):
                 return self.respond({'error':'Cross-origin request refused'},403)
             size = int(self.headers.get('Content-Length','0'))
-            if not 0 < size <= 12_000_000:
-                return self.respond({'error':'Request exceeds 12 MB limit'},413)
+            if not 0 < size <= (64_000_000 if self.path == '/api/assessment/import' else 12_000_000):
+                return self.respond({'error':'Request exceeds size limit'},413)
             body = json.loads(self.rfile.read(size))
             tenant = store.setting('active_tenant') or 'demo'
             if self.path == '/api/analyze':
@@ -170,6 +154,26 @@ class Handler(BaseHTTPRequestHandler):
                 sites,samples = store.dataset(tenant,start,end)
                 result = analyze(sites,samples,body['month'],scenario_valid(body.get('scenario',{})))
                 return self.respond(result)
+            if self.path == '/api/history':
+                return self.respond(history(tenant,body['months'],scenario_valid(body['scenario'])))
+            if self.path == '/api/compare':
+                scenarios=saved(tenant)
+                identifiers=body['ids']
+                if not identifiers or len(identifiers)>4 or any(i not in scenarios for i in identifiers):
+                    raise ValueError('Select up to four saved scenarios')
+                return self.respond({'results':[dict(id=i,assessment=history(tenant,body['months'],scenario_valid(scenarios[i]))) for i in identifiers]})
+            if self.path == '/api/scenarios/save':
+                return self.respond({'id':save_named(tenant,body['scenario'],body.get('id'))})
+            if self.path == '/api/day':
+                start,end=month_bounds(body['month']);sites,samples=store.dataset(tenant,start,end)
+                return self.respond(inspect_day(sites,samples,scenario_valid(body['scenario']),body['month'],body['site'],body['day']))
+            if self.path == '/api/report':
+                scenario=scenario_valid(body['scenario'])
+                return self.respond(pdf_report(tenant,scenario,history(tenant,body['months'],scenario)),kind='application/pdf')
+            if self.path == '/api/assessment/import':
+                with LOCK:
+                    if JOB['state']=='running':return self.respond({'error':'Wait for active collection before restoring an assessment'},409)
+                return self.respond({'tenant':import_bundle(body)})
             if self.path == '/api/scenario':
                 value = scenario_valid(body['scenario'])
                 store.setting('scenario:'+tenant,value)
@@ -183,7 +187,12 @@ class Handler(BaseHTTPRequestHandler):
                     if JOB['state'] == 'running':
                         return self.respond({'error':'Wait for the active collection to finish'},409)
                 month = body.get('month') or datetime.now(timezone.utc).strftime('%Y-%m')
-                demo(month)
+                from app.assessment import next_month
+                count=int(number(body.get('months',3),1,12))
+                for offset in range(count):demo(next_month(month,-offset))
+                if not (store.setting('scenario:demo') or {}).get('model_verified'):
+                    start,end=month_bounds(month);sites,_=store.dataset('demo',start,end)
+                    store.setting('scenario:demo',scenario_valid(dict(name='Demo baseline',model='bursting-2027',model_verified=True,pools={'Group 1':500,'Group 2':300,'China':80},sites={s['id']:dict(region=s['region'],capacity=s['capacity'],type=s['type'],verified=True) for s in sites})))
                 store.setting('active_tenant','demo')
                 return self.respond({'month':month})
             if self.path == '/api/discover':
@@ -193,7 +202,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self.respond({'sites':sites,'account':str(client.account)})
             if self.path == '/api/sync':
                 client = credentials(body)
-                start,end = month_bounds(body['month'])
+                start,_ = month_bounds(body.get('start_month',body['month']))
+                _,end = month_bounds(body['month'])
+                if end<=start or end-start>366*86400:raise ValueError('Select up to 12 months in chronological order')
                 # No future bucket requests; collect through the last completed UTC day.
                 end = min(end, int(time.time()) // 86400 * 86400)
                 if end <= start:

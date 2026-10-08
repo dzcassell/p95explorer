@@ -135,12 +135,12 @@ Open **http://localhost:8080/api/health** in your browser. Expected response:
 
 Then open **http://localhost:8080** and try this checklist on each machine:
 
-- Select **Load demo**. Expect six synthetic sites, three regional summaries, and 100% month coverage.
+- Select **Load demo**. Expect three synthetic months, six sites, three regional summaries, and 100% month coverage. The demo has confirmed synthetic inventory; live/imported inventory requires your verification.
 - Change the license model between bursting, fixed site, and enforced pool. Capacity recommendations should change.
 - Increase **Projected growth**. Modeled demand should increase.
 - Edit a regional pool capacity and a site allocation. Review the resulting capacity pressure.
 - Move the P95 lesson's burst duration from **70** to **75 minutes**. The illustrated daily P95 should change from **50** to **200 Mbps**.
-- Choose **Save scenario & site mapping**, refresh the page, and check that your scenario remains selected.
+- Choose **Save working scenario**, refresh the page, and check that your scenario remains selected.
 - Export a CSV. Optional: import it to test the separate imported-data workspace.
 
 Synthetic demo data makes it possible to test installation and calculations before connecting a real tenant. The selected observation month is a complete prior month on a fresh demo workspace.
@@ -206,7 +206,9 @@ For a ZIP installation, download the latest ZIP and replace the source files in 
 
 Each machine keeps its own Docker image, SQLite history and saved scenario. Signing into GitHub or cloning the same repository does not synchronize usage data or credentials.
 
-For a fresh platform test, install and **Load demo** on each machine. To carry observed usage between machines, use **Export CSV** on the source machine and **Import CSV** on the destination. CSV transfers the selected month's observations and saved site regions; it does **not** transfer saved scenario controls, allocations, credentials or the entire history. Re-enter those settings or recollect from Cato as needed. Verify region mapping after import.
+For a fresh platform test, install and **Load demo** on each machine. To carry a complete assessment between machines, use **Export assessment**, transfer the JSON file, then **Restore assessment** on the destination. This preserves observations, site inventory, the working scenario, selected months, CMA comparison inputs, pricing assumptions and named options; credentials are excluded. Restore creates a separate workspace and keeps existing tenants intact. Files must be below 60 MB and contain at most 600,000 buckets. See [the assessment guide](assessments.md).
+
+To transfer observations only, use **Export CSV** on the source machine and **Import CSV** on the destination. CSV transfers the selected month's observations and saved site regions; it does **not** transfer saved scenario controls, allocations, credentials or the entire history. Use assessment export when you need those modeling settings. Re-enter those settings or recollect from Cato as needed. Verify region mapping after import.
 
 For a complete workspace backup, preserve the Compose data volume using [Docker's volume backup/restore guidance](https://docs.docker.com/engine/storage/volumes/#back-up-restore-or-migrate-data-volumes). Stop collection and the application before backing up SQLite files; preserve the entire data directory rather than copying only a potentially active database file.
 

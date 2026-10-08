@@ -54,3 +54,20 @@ class ServerTests(unittest.TestCase):
         self.assertFalse(r['complete']);self.assertEqual(r['sites'][0]['peak'],40)
         with self.assertRaises(urllib.error.HTTPError):self.post('import',{'csv':csv+csv.splitlines()[1]+'\n','tenant':'test'})
         self.assertEqual(len(store.dataset('test',1788220800,1790812800)[1]),1)
+
+    def test_history_named_comparison_and_pdf_endpoints(self):
+        self.post('demo',{'month':'2026-09','months':2})
+        state=json.load(urllib.request.urlopen(self.base+'/api/state'))
+        scenario=state['scenario']
+        h=self.post('history',{'months':['2026-08','2026-09'],'scenario':scenario})
+        self.assertTrue(h['ready']);self.assertEqual(len(h['months']),2)
+        named=self.post('scenarios/save',{'scenario':scenario})
+        result=self.post('compare',{'months':['2026-09'],'ids':[named['id']]})
+        self.assertEqual(result['results'][0]['assessment']['name'],scenario['name'])
+        req=urllib.request.Request(self.base+'/api/report',json.dumps({'months':['2026-09'],'scenario':scenario}).encode(),{'Content-Type':'application/json','X-P95-CSRF':self.csrf})
+        response=urllib.request.urlopen(req)
+        self.assertTrue(response.read().startswith(b'%PDF-'))
+        self.assertIn('application/pdf',response.headers['Content-Type'])
+        data=json.load(urllib.request.urlopen(self.base+'/api/assessment'))
+        restored=self.post('assessment/import',data)
+        self.assertTrue(restored['tenant'].startswith('assessment-'))

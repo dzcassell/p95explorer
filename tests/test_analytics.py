@@ -20,9 +20,10 @@ class AnalyticsTests(unittest.TestCase):
                 samples.extend([dict(site_id='1',ts=start+day*86400+i*300,up=10,down=100 if i<144 else 10),
                                 dict(site_id='2',ts=start+day*86400+i*300,up=10,down=(200 if day==1 else 100) if i>=144 else 10)])
         r=analyze(sites,samples,'2026-09',{'model':'bursting-2027','pools':{'Group 1':250},'headroom':20})
-        self.assertEqual(r['pools'][0]['measured'],300)
-        self.assertEqual(r['pools'][0]['recommendation'],360)
-        self.assertEqual(r['pools'][0]['excess'],50)
+        self.assertEqual(r['pools'][0]['observed'],300)
+        self.assertIsNone(r['pools'][0]['measured'])
+        self.assertIsNone(r['pools'][0]['recommendation'])
+        self.assertIsNone(r['pools'][0]['excess'])
         self.assertFalse(r['complete'])
         self.assertEqual(r['sites'][0]['complete_days'],3)
 
@@ -30,9 +31,11 @@ class AnalyticsTests(unittest.TestCase):
         start,_=month_bounds('2026-02')
         r=analyze([dict(id='1',name='a',region='Group 1',capacity=90)],
                   [dict(site_id='1',ts=start,up=100,down=100)],'2026-02',{})
-        self.assertEqual(r['pools'][0]['measured'],100)
+        self.assertEqual(r['sites'][0]['peak'],100)
+        self.assertIsNone(r['pools'][0]['measured'])
         self.assertEqual(r['sites'][0]['over_minutes'],5)
-        self.assertFalse(r['pools'][0]['daily'][0]['complete'])
+        self.assertEqual(r['pools'][0]['daily'],[])
+        self.assertEqual(r['pools'][0]['excluded_days'],1)
         self.assertTrue(r['warnings'])
 
     def test_region_separation_and_enforcement(self):
@@ -40,9 +43,9 @@ class AnalyticsTests(unittest.TestCase):
         sites=[dict(id='1',name='a',region='Group 1',capacity=100),dict(id='2',name='b',region='China',capacity=200)]
         samples=[dict(site_id='1',ts=start,up=0,down=80),dict(site_id='2',ts=start,up=10,down=150)]
         r=analyze(sites,samples,'2026-09',{'model':'enforced-pool','headroom':20})
-        self.assertEqual({p['region']:p['measured'] for p in r['pools']},{'Group 1':100,'China':200})
+        self.assertEqual({p['region']:p['observed'] for p in r['pools']},{'Group 1':100,'China':200})
         self.assertFalse(next(p for p in r['pools'] if p['region']=='China')['supported'])
-        self.assertEqual(next(p for p in r['pools'] if p['region']=='Group 1')['recommendation'],100)
+        self.assertIsNone(next(p for p in r['pools'] if p['region']=='Group 1')['recommendation'])
 
     def test_leap_month_and_year_boundary(self):
         a,b=month_bounds('2024-02');self.assertEqual(b-a,29*86400)
@@ -52,8 +55,9 @@ class AnalyticsTests(unittest.TestCase):
         start,_=month_bounds('2026-09')
         r=analyze([dict(id='1',name='a',region='Group 1',capacity=90)],
                   [dict(site_id='1',ts=start,up=100,down=20)],'2026-09',{'growth':50,'headroom':20})
-        self.assertEqual(r['pools'][0]['measured'],150)
-        self.assertEqual(r['pools'][0]['recommendation'],180)
+        self.assertEqual(r['sites'][0]['observed'],150)
+        self.assertIsNone(r['pools'][0]['measured'])
+        self.assertIsNone(r['pools'][0]['recommendation'])
 
     def test_input_validation(self):
         for s in [{'growth':float('nan')},{'pools':{'Group 1':-1}},{'model':'made-up'}]:

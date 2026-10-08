@@ -30,7 +30,7 @@ Open **[http://localhost:8080](http://localhost:8080)** on that same machine and
 
 Check startup with `docker compose ps`: the `explorer` service should be running and become healthy. The [installation guide](docs/installation.md#verify-your-installation) includes verification and a short test checklist.
 
-The image supports `linux/amd64` and `linux/arm64`; CI builds both. Windows runs it as a **Linux container**. The server uses Python's standard library, SQLite, and local browser assets, with no runtime package downloads or CDN dependencies.
+The image supports `linux/amd64` and `linux/arm64`; CI builds both. Windows runs it as a **Linux container**. The server uses Python, SQLite, ReportLab for local PDF generation, and local browser assets. Dependencies are installed during the image build; the running app needs no CDN or package downloads.
 
 Stop with `docker compose down`. The named `explorer-data` volume retains observations and saved scenario settings on that machine. Use `docker compose up -d` to start again. **Do not add `--volumes` or `-v` to the stop command unless you intend to delete the stored data.** Each machine starts with its own local workspace; see [testing on another machine](docs/installation.md#testing-on-another-machine).
 
@@ -58,9 +58,23 @@ Collection runs in the background, saves completed batches locally, and upserts 
 | Fixed site licensing | Observed site peaks against each fixed site capacity |
 | Classic monthly P95 | Educational monthly per-site percentile comparison; not a Cato bursting billing rule |
 
-Growth scales observed rates. Headroom increases recommended capacity, rounded up to 10 Mbps as a planning increment—not an assertion about purchasable SKUs. Pools remain separate by region. Cloud Interconnect and stand-alone country enforcement exceptions are highlighted. Pricing, overage charges, service add-ons, and SKU availability must come from your commercial agreement.
+Growth scales observed rates globally, by region, or by site. Headroom increases recommended capacity, rounded up to your chosen capacity increment (10 Mbps initially). Supply verified SKU tiers for a commercial comparison; the increment alone does not assert purchasable SKUs. Pools remain separate by region. Cloud Interconnect and stand-alone country enforcement exceptions are highlighted. Pricing, overage charges, service add-ons, and SKU availability must come from your commercial agreement. Optional unit rates, SKU catalogs, discounts, flat service costs and expansion fees support explicit commercial projections; nothing is presented as an official quote.
 
-The app displays coverage against the entire calendar month. Incomplete observations produce provisional results. Null or missing directional buckets are excluded, not fabricated as zero. Already enforced traffic can conceal demand beyond a license limit. The API may return zero-valued buckets for unavailable telemetry; zero alone does not prove a site was idle. Compare with CMA before making purchasing decisions.
+The app displays coverage against the entire calendar month. Incomplete months, unverified model/inventory assumptions, unsupported regions, and material CMA reconciliation differences withhold final recommendations. Partial site days never contribute to regional daily aggregates. Null or missing directional buckets are excluded, not fabricated as zero. Already enforced traffic can conceal demand beyond a license limit. The API may return zero-valued buckets for unavailable telemetry; zero alone does not prove a site was idle. Compare with CMA before making purchasing decisions.
+
+## Guided assessments and sales conversations
+
+See **[the assessment guide](docs/assessments.md)** for the complete workflow:
+
+- Select several complete observation months and verify the model, site regions/types, and optional enforcement assumptions.
+- Save named options and compare up to four across the same window.
+- Inspect the determining regional day and each site's retained/discarded P95 buckets.
+- Reconcile unscaled bursting usage with a supplied CMA regional result.
+- Forecast site/region growth, scheduled new sites, and an explicit remaining contract horizon.
+- Price options using your supplied regional monthly rates or SKU catalogs, discounts, related-service costs and excess terms.
+- Export an executive PDF with a technical appendix, or move the workspace between machines using a portable assessment.
+
+Bursting forecasts start no earlier than January 2027. Fixed site capacity and SKUs stay separate. Stand-alone country pool sizing also covers modeled fixed site limits. No monetary comparison is available until pricing is confirmed and all selected months pass the evidence checks.
 
 ## CSV interchange
 
@@ -76,6 +90,7 @@ Timestamps must be timezone-aware and aligned to UTC five-minute boundaries. Use
 ## Development
 
 ```sh
+python3 -m pip install -r requirements.txt
 python3 -m app.server
 python3 -m unittest discover -s tests -v
 node --check app/static/app.js

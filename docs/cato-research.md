@@ -32,3 +32,11 @@ Site license regions and capacities are manually verified inputs. The app does n
 Unit tests cover the 70/75-minute percentile transition, order of site/regional aggregation, maximum-day monthly selection, regional separation, missing-data coverage, growth/headroom, peak unit conversion, invalid inputs and grouped-interface rejection. HTTP tests cover CSRF/host protection, demo generation, scenario persistence, CSV validation and export.
 
 A live acceptance run should verify the deployed GraphQL schema, selected site inventory, data retention/granularity for the requested historical period, grouped peak behavior and alignment with a complete CMA usage report. The current implementation cannot certify exact invoiced usage without that comparison.
+
+## Assessment evidence and commercial projections
+
+The assessment layer requires complete months and explicitly confirmed site/model assumptions. Partial site days are excluded from daily pool aggregates; no incomplete month produces final sizing. Manually supplied CMA values are compared only with unscaled bursting results, using an application review tolerance of max(0.5 Mbps, 1%); this is not a Cato billing tolerance.
+
+Forecasts are deterministic assumptions. Fixed sites retain individual requirements and SKU selections; stand-alone country pool plans cover fixed site limits. Commercial inputs are entirely user-supplied, including capacity increments, eligible SKU tiers, rates, discounts and fees. An expansion retains existing licensed capacity, and excess-charge comparisons cannot bypass site enforcement. Bursting forecasts begin no earlier than January 2027. Public documentation cannot establish customer-specific prices or certify tenant results.
+
+Portable assessment files whitelist inventory, normalized observations and scenario fields, retain source labels, and exclude credentials. Restoration validates data before writing an isolated workspace. Automated checks now include migration, multi-month sizing, incomplete-day exclusion, reconciliation blocking, forecast timing, catalog eligibility, discounts, separate site SKUs, enforcement constraints, HTTP/PDF export and portable round trips.

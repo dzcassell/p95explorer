@@ -2,6 +2,8 @@ FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 P95_BIND=0.0.0.0 P95_DATA_DIR=/data
 RUN groupadd --gid 10001 explorer && useradd --uid 10001 --gid explorer --no-create-home explorer && mkdir /data && chown explorer:explorer /data
 WORKDIR /srv
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=explorer:explorer app ./app
 USER explorer
 EXPOSE 8080
