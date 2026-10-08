@@ -1,0 +1,21 @@
+services:
+  explorer:
+    build: .
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      CATO_ACCOUNT_ID: ${CATO_ACCOUNT_ID:-}
+      CATO_API_KEY: ${CATO_API_KEY:-}
+      CATO_API_ENDPOINT: ${CATO_API_ENDPOINT:-https://api.catonetworks.com/api/v1/graphql2}
+    volumes:
+      - explorer-data:/data
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  explorer-data:
