@@ -4,7 +4,21 @@ A local bandwidth planning lab for Cato Networks tenants. Compare fixed site lic
 
 **Independent planning software.** Recommendations describe capacity under the selected model; they are not quotes or a substitute for your agreement or CMA usage reports.
 
-## Run with Docker
+## Install on your machine
+
+Start with the **[step-by-step installation guide](docs/installation.md)**:
+
+| Platform | Setup instructions |
+|---|---|
+| Windows | [Docker Desktop, WSL 2, and PowerShell](docs/installation.md#windows) |
+| macOS | [Apple silicon or Intel, with Terminal commands](docs/installation.md#macos) |
+| Linux | [Docker Engine and the Compose plugin](docs/installation.md#linux) |
+
+You need **Docker with Compose** and either Git or a downloaded copy of this repository. Python, Node.js, a Cato key, and a GitHub account are **not required** to try the demo. Internet access is needed for the first image build. The app serves its browser assets locally after that.
+
+### Quick start if Docker is already installed
+
+Start Docker Desktop on Windows/macOS, or your Docker Engine service on Linux. In PowerShell (Windows) or Terminal (macOS/Linux), run:
 
 ```sh
 git clone https://github.com/dzcassell/p95explorer.git
@@ -12,11 +26,15 @@ cd p95explorer
 docker compose up --build -d
 ```
 
-Open **http://localhost:8080** and choose **Load demo**. The demo generates a complete, synthetic prior month across six sites and three regions. No API key is needed.
+Open **[http://localhost:8080](http://localhost:8080)** on that same machine and choose **Load demo**. Expect a complete synthetic month across six sites and three regions. If you are using a downloaded ZIP, run the Compose command from the extracted folder containing `compose.yaml`.
 
-Docker Desktop works on Windows and macOS; Linux needs Docker Engine with Compose. Use Linux containers on Windows. The image supports `linux/amd64` and `linux/arm64`; CI builds both. The server uses Python's standard library, SQLite, and local browser assets, with no runtime package downloads or CDN dependencies.
+Check startup with `docker compose ps`: the `explorer` service should be running and become healthy. The [installation guide](docs/installation.md#verify-your-installation) includes verification and a short test checklist.
 
-Stop with `docker compose down`. The named `explorer-data` volume retains observations and scenario settings. Back up this volume before deleting it. The service binds to the host's loopback address: this version is designed for a single local operator.
+The image supports `linux/amd64` and `linux/arm64`; CI builds both. Windows runs it as a **Linux container**. The server uses Python's standard library, SQLite, and local browser assets, with no runtime package downloads or CDN dependencies.
+
+Stop with `docker compose down`. The named `explorer-data` volume retains observations and saved scenario settings on that machine. Use `docker compose up -d` to start again. **Do not add `--volumes` or `-v` to the stop command unless you intend to delete the stored data.** Each machine starts with its own local workspace; see [testing on another machine](docs/installation.md#testing-on-another-machine).
+
+For [updates](docs/installation.md#update-to-the-latest-version), [optional credentials](docs/installation.md#optional-cato-credentials), [port conflicts and other troubleshooting](docs/installation.md#troubleshooting), see the full guide. This version is intended for a single local operator and listens only on the host's loopback address.
 
 ## Connect to Cato
 
